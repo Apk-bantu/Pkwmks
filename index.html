@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logistics Dashboard - Dark & Light Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                        darkBorder: '#334155'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .tab-active { background-color: #A855F7; color: white; box-shadow: 0 10px 15px -3px rgba(168, 85, 247, 0.4); }
+        .tab-inactive { color: #94a3b8; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ddd6fe; border-radius: 10px; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-[#F5F3FF] dark:bg-darkBg text-slate-700 dark:text-slate-300">
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="flex flex-col lg:flex-row lg:items-center justify-between mb-10 gap-6">
+            <div class="flex items-center gap-4">
+                <div class="bg-purple-600 p-4 rounded-[2rem] shadow-lg shadow-purple-200 dark:shadow-none">
+                    <i data-lucide="truck" class="text-white w-8 h-8"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-black tracking-tight text-purple-900 dark:text-purple-400 uppercase leading-none">Logistics Dashboard</h1>
+                    <p id="current-date-info" class="text-purple-400 font-medium flex items-center gap-2 text-sm mt-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        DC. SAT MAKASSAR By.Ajun
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3 bg-white/80 dark:bg-darkCard backdrop-blur-md p-2 rounded-[2.5rem] shadow-sm border border-purple-100 dark:border-darkBorder">
+                <!-- Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" class="p-3 rounded-full hover:bg-purple-50 dark:hover:bg-slate-700 transition-all text-purple-600 dark:text-yellow-400" id="dark-mode-btn">
+                    <i data-lucide="moon" class="w-5 h-5 hidden dark:block"></i>
+                    <i data-lucide="sun" class="w-5 h-5 block dark:hidden"></i>
+                </button>
+
+                <div class="h-8 w-[1px] bg-purple-100 dark:bg-darkBorder mx-1"></div>
+
+                <button onclick="switchTab('actual')" id="tab-actual" class="tab-active flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Ringkasan
+                </button>
+                <button onclick="switchTab('report')" id="tab-report" class="tab-inactive flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all hover:text-purple-500">
+                    <i data-lucide="table" class="w-4 h-4"></i> Full Report
+                </button>
+                <button onclick="switchTab('simulasi')" id="tab-simulasi" class="tab-inactive flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all hover:text-purple-500">
+                    <i data-lucide="target" class="w-4 h-4"></i> Simulasi
+                </button>
+                <label class="flex items-center gap-2 bg-purple-50 dark:bg-slate-700 hover:bg-purple-100 dark:hover:bg-slate-600 text-purple-600 dark:text-purple-300 px-6 py-3 rounded-full cursor-pointer transition-all text-sm font-black border border-purple-200 dark:border-darkBorder">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>UPLOAD CSV</span>
+                    <input type="file" id="csv-upload" accept=".csv" class="hidden" onchange="handleFileUpload(event)">
+                </label>
+            </div>
+        </header>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="bg-white/50 dark:bg-darkCard/50 backdrop-blur-sm rounded-[3rem] p-24 text-center border-4 border-dashed border-purple-200 dark:border-darkBorder">
+            <div class="bg-purple-100 dark:bg-slate-700 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="file-up" class="text-purple-400 w-10 h-10"></i>
+            </div>
+            <h2 class="text-2xl font-black text-purple-900 dark:text-purple-400">Data Belum Tersedia</h2>
+            <p class="text-purple-400 mt-2 font-medium">Silakan unggah file CSV untuk memulai analisis data logistik.</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard-content" class="hidden space-y-8 animate-in">
+            <div id="section-actual" class="space-y-8">
+                <div id="kpi-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+
+                <!-- Tren Sales Utama -->
+                <div class="bg-white dark:bg-darkCard p-8 rounded-[3rem] shadow-xl shadow-purple-100/50 dark:shadow-none border border-purple-50 dark:border-darkBorder">
+                    <div class="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 class="font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">Tren Sales Harian</h3>
+                            <p class="text-xs text-slate-400 font-bold uppercase mt-1">Pergerakan Revenue Bulan Berjalan</p>
+                        </div>
+                        <div class="px-4 py-1.5 bg-purple-50 dark:bg-slate-700 rounded-full text-purple-600 dark:text-purple-300 text-[10px] font-black border border-purple-100 dark:border-darkBorder">DATA REAL-TIME</div>
+                    </div>
+                    <div class="h-[350px]">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full Report Section -->
+            <div id="section-report" class="hidden">
+                 <div class="bg-white dark:bg-darkCard rounded-[3rem] shadow-xl shadow-purple-100/50 dark:shadow-none border border-purple-50 dark:border-darkBorder overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-purple-50/50 dark:bg-slate-800/50 text-purple-400 dark:text-purple-300 text-[10px] font-black uppercase tracking-[0.2em]">
+                                <th class="pl-10 pr-6 py-6">Metrik Strategis</th>
+                                <th class="px-6 py-6 text-right">Nilai Aktual</th>
+                                <th class="px-6 py-6 text-right">Target DC</th>
+                                <th class="px-10 py-6 text-right">Status Performa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-table-body" class="divide-y divide-purple-50 dark:divide-darkBorder"></tbody>
+                    </table>
+                 </div>
+            </div>
+
+            <!-- Simulasi Section -->
+            <div id="section-simulasi" class="hidden grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div id="loss-card" class="bg-white dark:bg-darkCard p-10 rounded-[3rem] border border-purple-50 dark:border-darkBorder shadow-xl dark:shadow-none shadow-purple-100/50"></div>
+                <div id="handling-card" class="bg-white dark:bg-darkCard p-10 rounded-[3rem] border border-purple-50 dark:border-darkBorder shadow-xl dark:shadow-none shadow-purple-100/50"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div id="detail-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal()"></div>
+        <div class="bg-white dark:bg-darkCard w-full max-w-3xl rounded-[3rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] animate-in">
+            <div id="modal-header-bg" class="p-8 pb-6 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white flex justify-between items-start">
+                <div>
+                    <h3 id="modal-title" class="text-2xl font-black uppercase tracking-tight">Detail Metrik</h3>
+                    <p id="modal-subtitle" class="text-xs font-bold mt-1 uppercase opacity-80"></p>
+                </div>
+                <button onclick="closeModal()" class="bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition-all">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="p-8 pb-4 bg-white dark:bg-darkCard border-b border-slate-50 dark:border-darkBorder">
+                <div class="h-[220px] w-full">
+                    <canvas id="detailMetricChart"></canvas>
+                </div>
+            </div>
+
+            <div class="p-8 pt-4 overflow-y-auto custom-scrollbar flex-grow bg-slate-50/50 dark:bg-slate-900/50">
+                <div class="grid grid-cols-1 gap-3" id="modal-content-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TARGETS = {
+            ABSENSI: 70.00, OOS_WH: 1.00, OOS_TOKO: 1.00, SL_WH: 77.00,
+            SL_SUPPLIER: 77.00, SL_PICKER: 99.90, BTA_BK: 54447502,
+            PRODUCT_LOSS: 27223751, INVENTORY_BS: 136118754, TOTAL_HANDLING: 23702012,
+            LOADING_DC: 60.98, KESESUAIAN_JWP: 90.00, SALES: 223202000000
+        };
+
+        const METRIC_MAP = {
+            ABSENSI: { label: 'Absensi', icon: 'user-check', color: 'bg-blue-500', rgb: '59, 130, 246', bg: 'bg-blue-50 dark:bg-blue-900/20', unit: '%', isLower: false, dataKey: 'absensi' },
+            OOS_WH: { label: 'OOS WH', icon: 'box', color: 'bg-indigo-500', rgb: '99, 102, 241', bg: 'bg-indigo-50 dark:bg-indigo-900/20', unit: '%', isLower: true, dataKey: 'oos_wh' },
+            OOS_TOKO: { label: 'OOS Toko', icon: 'shopping-cart', color: 'bg-fuchsia-500', rgb: '217, 70, 239', bg: 'bg-fuchsia-50 dark:bg-fuchsia-900/20', unit: '%', isLower: true, dataKey: 'oos_toko' },
+            SL_WH: { label: 'Service Level WH', icon: 'truck', color: 'bg-purple-500', rgb: '168, 85, 247', bg: 'bg-purple-50 dark:bg-purple-900/20', unit: '%', isLower: false, dataKey: 'sl_wh' },
+            SL_SUPPLIER: { label: 'SL Supplier', icon: 'refresh-ccw', color: 'bg-cyan-500', rgb: '6, 182, 212', bg: 'bg-cyan-50 dark:bg-cyan-900/20', unit: '%', isLower: false, dataKey: 'sl_supplier' },
+            SL_PICKER: { label: 'SL Picker', icon: 'zap', color: 'bg-orange-500', rgb: '249, 115, 22', bg: 'bg-orange-50 dark:bg-orange-900/20', unit: '%', isLower: false, dataKey: 'sl_picker' },
+            BTA_BK: { label: 'BTA BK', icon: 'layers', color: 'bg-emerald-500', rgb: '16, 185, 129', bg: 'bg-emerald-50 dark:bg-emerald-900/20', unit: 'val', isLower: true, dataKey: 'bta_bk' },
+            PRODUCT_LOSS: { label: 'Product Loss', icon: 'alert-circle', color: 'bg-rose-500', rgb: '244, 63, 94', bg: 'bg-rose-50 dark:bg-rose-900/20', unit: 'val', isLower: true, dataKey: 'product_loss' },
+            INVENTORY_BS: { label: 'Inventory BS', icon: 'package', color: 'bg-amber-500', rgb: '245, 158, 11', bg: 'bg-amber-50 dark:bg-amber-900/20', unit: 'val', isLower: true, dataKey: 'inventory_bs' },
+            TOTAL_HANDLING: { label: 'Total Handling', icon: 'calculator', color: 'bg-lime-500', rgb: '132, 204, 22', bg: 'bg-lime-50 dark:bg-lime-900/20', unit: 'val', isLower: true, dataKey: 'total_handling' },
+            LOADING_DC: { label: 'Loading DC', icon: 'clock', color: 'bg-sky-500', rgb: '14, 165, 233', bg: 'bg-sky-50 dark:bg-sky-900/20', unit: '%', isLower: false, dataKey: 'loading_dc' },
+            KESESUAIAN_JWP: { label: 'Kesesuaian JWP', icon: 'file-text', color: 'bg-violet-500', rgb: '139, 92, 246', bg: 'bg-violet-50 dark:bg-violet-900/20', unit: '%', isLower: false, dataKey: 'kesesuaian_jwp' },
+            SALES: { label: 'Sales', icon: 'dollar-sign', color: 'bg-pink-500', rgb: '236, 72, 153', bg: 'bg-pink-50 dark:bg-pink-900/20', unit: 'val', isLower: false, dataKey: 'sales' }
+        };
+
+        let rawData = [];
+        let stats = {};
+        let mainChart = null;
+        let detailChart = null;
+        let isDark = false;
+
+        function toggleDarkMode() {
+            isDark = !isDark;
+            document.documentElement.classList.toggle('dark', isDark);
+            if (rawData.length > 0) {
+                renderMainSalesChart();
+            }
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                const rows = text.split('\n').slice(1);
+                rawData = rows.filter(row => row.trim() !== '').map((row) => {
+                    const c = row.split(',');
+                    return {
+                        tanggal: c[0],
+                        absensi: parseFloat(c[1]) || 0,
+                        oos_wh: parseFloat(c[2]) || 0,
+                        oos_toko: parseFloat(c[3]) || 0,
+                        sl_wh: parseFloat(c[4]) || 0,
+                        sl_supplier: parseFloat(c[5]) || 0,
+                        sl_picker: parseFloat(c[6]) || 0,
+                        bta_bk: parseFloat(c[9]) || 0,
+                        product_loss: Math.abs(parseFloat(c[10])) || 0,
+                        inventory_bs: parseFloat(c[11]) || 0,
+                        total_handling: parseFloat(c[15]) || 0,
+                        loading_dc: parseFloat(c[16]) || 0,
+                        kesesuaian_jwp: parseFloat(c[17]) || 0,
+                        sales: parseFloat(c[18]) || 0
+                    };
+                });
+                calculateStats();
+                renderDashboard();
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+            };
+            reader.readAsText(file);
+        }
+
+        function calculateStats() {
+            Object.keys(METRIC_MAP).forEach(key => {
+                const config = METRIC_MAP[key];
+                const values = rawData.map(d => d[config.dataKey]);
+                const act = config.unit === '%' ? (values.reduce((a, b) => a + b, 0) / values.length) : values.reduce((a, b) => a + b, 0);
+                const tar = TARGETS[key];
+                stats[key] = { act, tar, ach: getAchieve(act, tar, config.isLower) };
+            });
+        }
+
+        function getAchieve(act, tar, isLower) {
+            if (isLower) return act === 0 ? 100 : (tar / act) * 100;
+            return tar === 0 ? 0 : (act / tar) * 100;
+        }
+
+        function formatVal(val, unit) {
+            if (unit === '%') return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+            return Math.round(val).toLocaleString('id-ID');
+        }
+
+        function renderDashboard() {
+            const grid = document.getElementById('kpi-grid');
+            grid.innerHTML = '';
+            Object.keys(METRIC_MAP).forEach(key => {
+                const m = METRIC_MAP[key];
+                const s = stats[key];
+                const isAchieved = s.ach >= 100;
+                
+                grid.innerHTML += `
+                    <div onclick="openModal('${key}')" class="bg-white dark:bg-darkCard p-6 rounded-[2.5rem] border border-purple-50 dark:border-darkBorder shadow-sm cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all group relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-24 h-24 ${m.bg} rounded-full -mr-12 -mt-12 opacity-50 group-hover:scale-110 transition-transform"></div>
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <div class="${m.color} p-3 rounded-2xl shadow-lg shadow-current/20 text-white">
+                                <i data-lucide="${m.icon}" class="w-5 h-5"></i>
+                            </div>
+                            <span class="text-[10px] font-black px-3 py-1 rounded-full ${isAchieved ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600' : 'bg-rose-50 dark:bg-rose-900/30 text-rose-600'} border ${isAchieved ? 'border-emerald-100 dark:border-emerald-800' : 'border-rose-100 dark:border-rose-800'}">
+                                ${s.ach.toFixed(1)}%
+                            </span>
+                        </div>
+                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest relative z-10">${m.label}</p>
+                        <h3 class="text-2xl font-black text-slate-800 dark:text-slate-100 font-mono mt-1 relative z-10">${formatVal(s.act, m.unit)}</h3>
+                        <div class="mt-4 pt-3 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between relative z-10">
+                            <span class="text-[9px] font-bold text-slate-300 dark:text-slate-500 uppercase">Target DC</span>
+                            <span class="text-[10px] font-black text-slate-500 dark:text-slate-400 font-mono">${formatVal(s.tar, m.unit)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+            renderMainSalesChart();
+            renderTable();
+            renderSimulasi();
+        }
+
+        function openModal(key) {
+            const m = METRIC_MAP[key];
+            const tar = TARGETS[key];
+            document.getElementById('modal-title').innerText = m.label;
+            document.getElementById('modal-subtitle').innerText = `Standard Target: ${formatVal(tar, m.unit)}`;
+            
+            const list = document.getElementById('modal-content-list');
+            list.innerHTML = '';
+
+            rawData.forEach(day => {
+                const val = day[m.dataKey];
+                const ach = getAchieve(val, tar, m.isLower);
+                const isSuccess = ach >= 100;
+                
+                list.innerHTML += `
+                    <div class="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-darkBorder shadow-sm">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black ${isSuccess ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600' : 'bg-rose-50 dark:bg-rose-900/30 text-rose-600'}">
+                                <span class="text-[9px] uppercase opacity-60">TGL</span>
+                                <span class="text-base leading-tight">${day.tanggal.split('-').pop()}</span>
+                            </div>
+                            <div><p class="text-xs font-black text-slate-800 dark:text-slate-200">${day.tanggal}</p><p class="text-[10px] font-bold text-slate-400 uppercase">Ach ${ach.toFixed(1)}%</p></div>
+                        </div>
+                        <p class="text-base font-black font-mono ${isSuccess ? 'text-emerald-600' : 'text-rose-600'}">${formatVal(val, m.unit)}</p>
+                    </div>
+                `;
+            });
+
+            document.getElementById('detail-modal').classList.remove('hidden');
+            setTimeout(() => renderDetailMetricChart(key), 100);
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+            if (detailChart) detailChart.destroy();
+        }
+
+        function renderMainSalesChart() {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            if (mainChart) mainChart.destroy();
+            
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: rawData.map(d => d.tanggal.split('-').pop()),
+                    datasets: [{
+                        data: rawData.map(d => d.sales),
+                        borderColor: '#A855F7',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointBackgroundColor: isDark ? '#1e293b' : '#fff',
+                        pointBorderColor: '#A855F7',
+                        fill: true,
+                        backgroundColor: (ctx) => {
+                            const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                            gradient.addColorStop(0, 'rgba(168, 85, 247, 0.15)');
+                            gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
+                            return gradient;
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { grid: { color: gridColor }, ticks: { font: { weight: 'bold' }, color: textColor } },
+                        x: { grid: { display: false }, ticks: { font: { weight: 'bold' }, color: textColor } }
+                    }
+                }
+            });
+        }
+
+        function renderDetailMetricChart(key) {
+            const m = METRIC_MAP[key];
+            const ctx = document.getElementById('detailMetricChart').getContext('2d');
+            if (detailChart) detailChart.destroy();
+            
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+
+            detailChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: rawData.map(d => d.tanggal.split('-').pop()),
+                    datasets: [
+                        {
+                            label: 'Aktual',
+                            data: rawData.map(d => d[m.dataKey]),
+                            borderColor: `rgb(${m.rgb})`,
+                            backgroundColor: `rgba(${m.rgb}, 0.1)`,
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Target',
+                            data: Array(rawData.length).fill(TARGETS[key]),
+                            borderColor: isDark ? '#475569' : '#cbd5e1',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: isDark ? '#1e293b' : '#f8fafc' } },
+                        x: { ticks: { color: textColor, font: { size: 9 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderTable() {
+            const body = document.getElementById('report-table-body');
+            body.innerHTML = '';
+            Object.keys(METRIC_MAP).forEach(key => {
+                const m = METRIC_MAP[key];
+                const s = stats[key];
+                body.innerHTML += `
+                    <tr class="hover:bg-purple-50/30 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="pl-10 pr-6 py-5"><div class="flex items-center gap-3"><div class="${m.bg} p-2 rounded-lg text-purple-600 dark:text-purple-400"><i data-lucide="${m.icon}" class="w-4 h-4"></i></div><span class="font-bold text-sm text-slate-700 dark:text-slate-300 uppercase">${m.label}</span></div></td>
+                        <td class="px-6 py-5 text-right font-mono text-sm font-bold text-slate-600 dark:text-slate-400">${formatVal(s.act, m.unit)}</td>
+                        <td class="px-6 py-5 text-right font-mono text-sm text-slate-400 dark:text-slate-500">${formatVal(s.tar, m.unit)}</td>
+                        <td class="px-10 py-5 text-right"><span class="px-4 py-1.5 rounded-full font-black text-[10px] ${s.ach >= 100 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'}">${s.ach >= 100 ? 'EXCELLENT' : 'UNDER PERFORM'}</span></td>
+                    </tr>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function renderSimulasi() {
+            const loss = stats.PRODUCT_LOSS;
+            const hand = stats.TOTAL_HANDLING;
+            document.getElementById('loss-card').innerHTML = `<div class="flex items-center gap-3 mb-4"><div class="bg-rose-100 dark:bg-rose-900/30 p-3 rounded-2xl text-rose-600"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div><p class="text-[11px] font-black text-slate-400 uppercase tracking-widest">Financial Impact Loss</p></div><h4 class="text-4xl font-black ${loss.act > loss.tar ? 'text-rose-500' : 'text-emerald-500'} font-mono">${formatVal(Math.abs(loss.act - loss.tar), 'val')}</h4><p class="text-xs font-bold text-slate-400 mt-2">${loss.act > loss.tar ? 'Over-limit dari target' : 'Efisiensi budget tercapai'}</p>`;
+            document.getElementById('handling-card').innerHTML = `<div class="flex items-center gap-3 mb-4"><div class="bg-emerald-100 dark:bg-emerald-900/30 p-3 rounded-2xl text-emerald-600"><i data-lucide="banknote" class="w-6 h-6"></i></div><p class="text-[11px] font-black text-slate-400 uppercase tracking-widest">Efficiency Handling</p></div><h4 class="text-4xl font-black ${hand.act > hand.tar ? 'text-rose-500' : 'text-emerald-500'} font-mono">${formatVal(Math.abs(hand.act - hand.tar), 'val')}</h4><p class="text-xs font-bold text-slate-400 mt-2">${hand.act > hand.tar ? 'Cost overrun handling' : 'Optimasi biaya berjalan baik'}</p>`;
+            lucide.createIcons();
+        }
+
+        function switchTab(id) {
+            ['actual', 'report', 'simulasi'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).className = 'tab-inactive flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all hover:text-purple-500';
+            });
+            document.getElementById(`section-${id}`).classList.remove('hidden');
+            document.getElementById(`tab-${id}`).className = 'tab-active flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all shadow-lg';
+            if (id === 'actual' && rawData.length > 0) renderMainSalesChart();
+        }
+
+        document.getElementById('current-date-info').innerHTML += ` • ${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+        lucide.createIcons();
+    </script>
+</body>
+</html>
